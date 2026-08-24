@@ -1,0 +1,112 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-netflow}
+      POSTGRES_USER: ${POSTGRES_USER:-netflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/postgres/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8-alpine
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netflow}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netflow}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-too}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./database/clickhouse/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user $${CLICKHOUSE_USER} --password $${CLICKHOUSE_PASSWORD} --query 'SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netflow}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netflow}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-too}
+      POSTGRES_DSN: postgresql://${POSTGRES_USER:-netflow}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-netflow}
+      INGEST_API_KEY: ${INGEST_API_KEY:-replace-with-a-long-random-value}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+
+  collector:
+    build: ./collector
+    restart: unless-stopped
+    ports:
+      - "${NETFLOW_PORT:-9996}:9996/udp"
+    volumes:
+      - flow_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x nfcapd >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  processor:
+    build: ./processor
+    restart: unless-stopped
+    environment:
+      FLOW_DIR: /flows
+      STATE_FILE: /state/processed.json
+      API_URL: http://api:8080
+      POLL_SECONDS: 10
+      BATCH_SIZE: 5000
+      CUSTOMER_MAP_FILE: /config/subscribers.json
+      INGEST_API_KEY: ${INGEST_API_KEY:-replace-with-a-long-random-value}
+      CUSTOMER_NETWORKS: ${CUSTOMER_NETWORKS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10}
+    volumes:
+      - flow_data:/flows:ro
+      - processor_state:/state
+      - ./config:/config:ro
+    depends_on:
+      api:
+        condition: service_started
+      collector:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python processor.py' >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8081}:80"
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  clickhouse_data:
+  flow_data:
+  processor_state:
