@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NetFlow ISP Analytics</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">MONITOREO DE RED</p>
+      <h1>NetFlow ISP Analytics</h1>
+    </div>
+    <div class="controls">
+      <label>Periodo
+        <select id="hours">
+          <option value="1">Última hora</option>
+          <option value="24" selected>24 horas</option>
+          <option value="168">7 días</option>
+          <option value="720">30 días</option>
+        </select>
+      </label>
+      <button id="refresh">Actualizar</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="status-line">
+      <span id="status-dot" class="dot"></span>
+      <span id="status">Conectando con el colector…</span>
+      <span id="updated"></span>
+    </section>
+
+    <section class="metrics" aria-label="Resumen">
+      <article><span>Tráfico total</span><strong id="total">—</strong></article>
+      <article><span>Descarga</span><strong id="down">—</strong></article>
+      <article><span>Subida</span><strong id="up">—</strong></article>
+      <article><span>Clientes observados</span><strong id="subscribers">—</strong></article>
+      <article><span>Flujos procesados</span><strong id="flows">—</strong></article>
+      <article><span>Routers exportando</span><strong id="exporters">—</strong></article>
+    </section>
+
+    <section class="grid">
+      <article class="panel wide">
+        <div class="panel-head">
+          <div><p class="eyebrow">CONSUMO</p><h2>Clientes principales</h2></div>
+          <span>Ordenado por volumen total</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Cliente/IP</th><th>Descarga</th><th>Subida</th><th>Destinos</th><th>Flujos</th></tr></thead>
+            <tbody id="top-clients"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow danger">REVISIÓN</p><h2>Patrones inusuales</h2></div></div>
+        <div id="risk-list" class="risk-list"></div>
+        <p class="footnote">El indicador orienta una revisión operativa; no demuestra reventa por sí solo.</p>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">DESTINOS</p><h2>Mayor tráfico</h2></div></div>
+        <div id="destinations" class="destination-list"></div>
+      </article>
+    </section>
+  </main>
+
+  <template id="empty-row"><tr><td colspan="5" class="empty">Todavía no existen flujos para este periodo.</td></tr></template>
+  <script src="/app.js"></script>
+</body>
+</html>
